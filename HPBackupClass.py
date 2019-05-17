@@ -10,6 +10,8 @@ from netmiko import ConnectHandler
 import os
 import sys
 import time
+import smtplib
+from email.mime.text import MIMEText 
 
 class ProCurveControl():
     def __init__(self, username, password, ip):
@@ -124,6 +126,19 @@ class ProCurveControl():
         except:
             sys.stdout = sys.__stdout__
             return str('Could not pull dhcp snooping information') 
+
+    def pull_portsecurity(self):
+        try:
+            if self.netdatabase['connected'] == False:
+                return str('Please connect device first')
+            else:
+                sys.stdout = open(os.devnull, 'w')
+                self.netdatabase.update({'raw_portsecurity': self.ssh.send_command('show port-security')})
+                sys.stdout = sys.__stdout__ 
+                return str('Port Security saved to database') 
+        except:
+            sys.stdout = sys.__stdout__ 
+            return str('Could not pull Port Security information')
     
     def show_DBstartupconfig(self):
         try:
@@ -154,6 +169,48 @@ class ProCurveControl():
             print(self.netdatabase['raw_dhcpsnooping'])
         except:
             return str('Could not find database copy of dhcp snooping info') 
+
+    def show_DBportsecurity(self):
+        try:
+            print(self.netdatabase['raw_portsecurity'])
+        except:
+            return str('Could not find database copy of port security info') 
+
+    def return_DBstartupconfig(self):
+        try:
+            return self.netdatabase['raw_startupconfig']
+        except:
+            return str('Could not find startup config in database')
+
+    def return_DBrunningconfig(self):
+        try:
+            return self.netdatabase['raw_runningconfig']
+        except:
+            return str('Could not find running config in database')
+
+    def return_DBlogging(self):
+        try:
+            return self.netdatabase['raw_logging']
+        except:
+            return str('Could not find logging info in database')
+
+    def return_DBvlans(self):
+        try:
+            return self.netdatabase['raw_vlans']
+        except:
+            return str('Could not find vlans info in database')
+    
+    def return_DBdhcpsnooping(self):
+        try:
+            return self.netdatabase['raw_dhcpsnooping']
+        except:
+            return str('Could not find dhcp snooping in database')
+        
+    def return_DBportsecurity(self):
+        try:
+            return self.netdatabase['raw_portsecurity']
+        except:
+            return str('Could not find port security in database') 
 
     def download_startupconfig(self):
         try:
@@ -254,4 +311,53 @@ class ProCurveControl():
         except:
             sys.stdout = sys.__stdout__
             return str('Could not save database copy of dhcp snooping')
+
+    def download_portsecurity(self):
+        try:
+            today = str("portsecurity_" + self.netdatabase['datetime'])
+            location = str(self.netdatabase['root_location'] + '/' + today)
+            if not os.listdir(str(self.netdatabase['root_location'])).__contains__(today):
+                os.mkdir(str(self.netdatabase['root_location'] + '/' + today))
+            os.chdir(location)
+            filename = str(self.netdatabase['device_name'] + "_portsecurity" + self.netdatabase['datetime'] + ".txt")
+            file = open(filename, 'a')
+            sys.stdout = open(os.devnull, 'w')
+            for line in self.netdatabase['raw_portsecurity'].splitlines():
+                file.write(line)
+                file.write("\n")
+            file.close()
+            os.chdir(str(self.netdatabase['root_location']))
+            sys.stdout = sys.__stdout__ 
+        except:
+            sys.stdout = sys.__stdout__
+            return str('Could not save database copy of port security')
+
+    def return_warning_logs(self):
+        try:
+            loggs = self.netdatabase['raw_logging'].splitlines()
+            for line in range(0, 3):
+                loggs.remove(loggs[0])
+            warnings = []
+            for line in loggs:
+                if line[0] == 'W':
+                    warnings.append(line)
+            return warnings 
+        except:
+            return str('Could not filter warning messages')
+            
+
+
+def send_email(username, password, server, to, subject, body):
+    try:
+        mailserver = smtplib.SMTP(server, '25')
+        mailserver.login(username, password)
+        message = MIMEText(body)
+        message['To'] = to
+        message['From'] = username
+        message['Subject'] = subject
+        text = message.as_string()
+        mailserver.sendmail(to, username, text)
+    except:
+        return str('Could not send email to ' + str(to))
+
 
