@@ -4,7 +4,7 @@ differing programs on the network.
 """
 __author__ = 'Xander Petty'
 __contact__ = 'Xander.Petty@protonmail.com'
-__version__ = '1.0'
+__version__ = '1.2'
 
 from netmiko import ConnectHandler
 import os
@@ -139,6 +139,19 @@ class ProCurveControl():
         except:
             sys.stdout = sys.__stdout__ 
             return str('Could not pull Port Security information')
+
+    def pull_interfacebrief(self):
+        try:
+            if self.netdatabase['connected'] == False:
+                return str('Please connect device first')
+            else:
+                sys.stdout = open(os.devnull, 'w')
+                self.netdatabase.update({'raw_interfacebrief': self.ssh.send_command('show interface brief')})
+                sys.stdout = sys.__stdout__
+                return str('interface brief added to database')
+        except:
+            sys.stdout = sys.__stdout__ 
+            return str('Could not pull interface brief') 
     
     def show_DBstartupconfig(self):
         try:
@@ -176,6 +189,12 @@ class ProCurveControl():
         except:
             return str('Could not find database copy of port security info') 
 
+    def show_DBinterfacebrief(self):
+        try:
+            print(self.netdatabase['raw_interfacebrief'])
+        except:
+            return str('Could not find database copy of interface brief info') 
+
     def return_DBstartupconfig(self):
         try:
             return self.netdatabase['raw_startupconfig']
@@ -211,6 +230,12 @@ class ProCurveControl():
             return self.netdatabase['raw_portsecurity']
         except:
             return str('Could not find port security in database') 
+
+    def return_DBinterfacebrief(self):
+        try:
+            return self.netdatabase['raw_interfacebrief']
+        except:
+            return str('Could not find interface brief in database') 
 
     def download_startupconfig(self):
         try:
@@ -332,6 +357,66 @@ class ProCurveControl():
             sys.stdout = sys.__stdout__
             return str('Could not save database copy of port security')
 
+    def download_interfacebrief(self):
+        try:
+            today = str("interfacebrief_" + self.netdatabase['datetime'])
+            location = str(self.netdatabase['root_location'] + '/' + today)
+            if not os.listdir(str(self.netdatabase['root_location'])).__contains__(today):
+                os.mkdir(str(self.netdatabase['root_location'] + '/' + today))
+            os.chdir(location)
+            filename = str(self.netdatabase['device_name'] + "_interfacebrief" + self.netdatabase['datetime'] + ".txt")
+            file = open(filename, 'a')
+            sys.stdout = open(os.devnull, 'w')
+            for line in self.netdatabase['raw_interfacebrief'].splitlines():
+                file.write(line)
+                file.write("\n")
+            file.close()
+            os.chdir(str(self.netdatabase['root_location'])) 
+            sys.stdout = sys.__stdout__
+        except:
+            sys.stdout = sys.__stdout__ 
+            return str('Could not save database copy of interface brief') 
+
+    def append_alertlog(self):
+        try:
+            today = str("intrusion_alerts_" + self.netdatabase['datetime'])
+            location = str(self.netdatabase['root_location'] + '/' + today) 
+            os.chdir(location) 
+            file = open(today, 'a')
+            sys.stdout = open(os.devnull, 'w')
+            sec = self.return_intrusionalerts()
+            file.write(str(self.netdatabase['device_name']))
+            file.write("\n")
+            for line in sec:
+                file.write(line)
+                file.write("\n")
+            file.close() 
+            os.chdir(str(self.netdatabase['root_location'])) 
+            sys.stdout = sys.__stdout__ 
+        except:
+            sys.stdout = sys.__stdout__ 
+            return str('Could no append intrusion log') 
+
+    def append_warninglog(self):
+        try:
+            today = str("warning_logs_" + self.netdatabase['datetime'])
+            location = str(self.netdatabase['root_location'] + '/' + today)
+            os.chdir(location)
+            file = open(today, 'a')
+            sys.stdout = open(os.devnull, 'w')
+            loggs = self.return_warning_logs()
+            file.write(str(self.netdatabase['device_name']))
+            file.write("\n")
+            for line in loggs:
+                file.write(line)
+                file.write("\n")
+            file.close() 
+            os.chdir(str(self.netdatabase['root_location'])) 
+            sys.stdout = sys.__stdout__ 
+        except:
+            sys.stdout = sys.__stdout__ 
+            return str('Could not append warning log') 
+
     def return_warning_logs(self):
         try:
             loggs = self.netdatabase['raw_logging'].splitlines()
@@ -340,11 +425,32 @@ class ProCurveControl():
             warnings = []
             for line in loggs:
                 if line[0] == 'W':
-                    warnings.append(line)
+                    if not line.__contains__('snmp'):
+                        warnings.append(line)
             return warnings 
         except:
             return str('Could not filter warning messages')
-            
+
+    def return_intrusionalerts(self):
+        # NOTE: This one isn't working.
+        try:
+            sec = self.netdatabase['raw_portsecurity'].splitlines()
+            for line in range(0, 6):
+                sec.remove(sec[0])
+            sec.remove(sec[len(sec) - 1])
+            alerts = []
+            for line in sec:
+                if line[4] == ' ':
+                    if line[20] == 'Y':
+                        iface = str(line[2] + line[3])
+                        alerts.append(iface)
+                else:
+                    if line[21] == 'Y':
+                        iface = str(line[2] + line[3] + line[4])
+                        alerts.append(iface) 
+            return alerts 
+        except:
+            return str('Could not gather intrusion alerts') 
 
 
 def send_email(username, password, server, to, subject, body):
